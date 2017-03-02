@@ -1,0 +1,295 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+	<title>五子棋</title>
+	<style type="text/css">
+		canvas {
+			display: block;
+			margin: 50px auto;
+			box-shadow: -2px -2px 2px #EFEFEF, 5px 5px 5px #B9B9B9;
+		}
+
+		#message {
+			display: flex;
+			justify-content: center;
+			font-size: 16px;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="chess" width="450px" height="450px"></canvas>
+	<div id="message"></div>
+	<script type="text/javascript">
+		//常量
+		const black = 0
+		const white = 1
+		const empty = -1
+
+		//保存棋盘中落子情况  初始化为空
+		let chessBoard = []
+		//三维数组 前两维棋盘  后一维是第i种赢法
+		let wins = []
+		//一维数组，我方某种赢法的权值
+		let myWin = []
+		//一维数组，计算机某种赢法的权值
+		let computerWin = []
+		//所有赢法的总数
+		let count = 0
+
+		initChessBoard()
+		initWins()
+
+		//利用canvas构建棋盘
+		let chess = document.getElementById('chess')
+		let context = chess.getContext('2d')		
+
+		//绘制背景色
+		context.beginPath();   
+	  context.fillStyle = 'rgb(222, 184, 135)';   
+	  context.closePath()
+	  context.fillRect(0, 0, 450, 450);
+
+		//绘制棋盘线
+		context.strokeStyle = 'black'
+		context.lineWidth = 0.3
+		for (let i=0; i<15; i++) {	
+			context.moveTo(15 + i * 30, 15)
+			context.lineTo(15 + i * 30, 435)
+			context.stroke()
+
+			context.moveTo(15, 15 + i * 30)
+			context.lineTo(435, 15 + i * 30)
+			context.stroke()
+		}
+
+
+		//设置棋盘的点击事件
+		chess.onclick = function(e) {
+			let x = e.offsetX;
+			let y = e.offsetY;
+			//向下取整
+			let i = Math.floor(x/30)
+			let j = Math.floor(y/30)
+			//如果棋盘不为空
+			if (chessBoard[i][j] === empty) {
+				document.getElementById('message').innerHTML = ''
+				oneStep(i, j, black)
+				chessBoard[i][j] = black
+
+				//判断胜负
+				for (let k = 0; k < count; k++) {
+					if (wins[i][j][k]) {
+						//假如落子点处于某种赢法的落子范围，此赢法权值加1  权值为5是代表胜利
+						myWin[k]++
+						//计算机此赢法无希望
+						//例如  下在第一列第一行 则计算机有三种赢法无希望（横 竖 正斜线）
+						computerWin[k] = -1
+						if (myWin[k] === 5) {
+							document.getElementById('message').innerHTML = 'you win'
+							return
+						}
+					}
+				}				
+			} else {
+				document.getElementById('message').innerHTML = '此处已有落子'
+				return
+			}
+			//点击落子后由计算机再落一子
+			computerAI()
+		}
+
+		//落子  绘制一个棋子 i j 棋盘位置   me： 白棋黑棋
+		function oneStep(i, j, me) {
+			context.beginPath()
+			//绘制扇形
+			// 1 2 参数圆心 3半径 4起始弧度  5终止弧度
+			context.arc(15 + i * 30, 15 + j * 30, 13, 0, 2 * Math.PI)
+			context.closePath()
+			//设置棋子圆心渐变色   前三个参数  圆心 圆心 半径 外圆     后三个参数内圆
+			let gradient = 
+				context.createRadialGradient(15+i*30+2, 15+j*30-2, 13,
+					15+i*30+2, 15+j*30-2, 0)
+			if(me === black) {
+				//落黑棋
+				gradient.addColorStop(0, '#0a0a0a') //0渐变开始
+				gradient.addColorStop(1, '#636766') //1渐变结束
+			} else {
+				//落白棋
+				gradient.addColorStop(0, '#d1d1d1') 
+				gradient.addColorStop(1, '#f9f9f9')
+			}
+			context.fillStyle = gradient
+			context.fill()
+		}
+
+		function computerAI() {
+			//下子在 i j 点拦截玩家的价值
+			let myScore = []
+			//下子在 i j 点计算机可以赢的价值
+			let computerScore = []
+
+			let maxScore = 0
+
+			let u = 0, v = 0
+
+			for(let i=0; i<15; i++) {
+				myScore[i] = []
+				computerScore[i] = []
+				for(let j=0; j<15; j++) {
+					myScore[i][j] = 0
+					computerScore[i][j] = 0
+				}
+			}
+
+			//遍历棋盘
+			for (let i = 0; i < 15; i++) {
+				for (let j = 0; j<15; j++) {
+					//遍历还没下子的位置
+					if (chessBoard[i][j] === empty) {
+						//获取此位置下子价值
+						for(let k=0; k<count; k++) {
+							// wins[i][j][k] === true 在i j 落子  对第K种赢法有价值
+							// i j 点落子可能会有多种赢法，多种赢法的价值都会加在score里，最后取score的最大值
+							let score = 0
+							if (wins[i][j][k]) {
+								switch(myWin[k]) {
+									//第k种赢法玩家已经落1子
+									case 1: 
+										myScore[i][j] += 200;break;
+									case 2:
+										myScore[i][j] += 400;break;
+									case 3: 
+										myScore[i][j] += 2000;break;
+									case 4: 
+										myScore[i][j] += 10000;break;
+									default: break;
+								}
+								switch(computerWin[k]) {
+									//第k种赢法计算机已经落1子
+									case 1: 
+										computerScore[i][j] += 220;break;
+									case 2: 
+										computerScore[i][j] += 440;break;
+									case 3: 
+										computerScore[i][j] += 2200;break;
+									case 4:
+										computerScore[i][j] += 20000;break;
+										default: break;
+								}						
+							}
+						}
+
+						if (myScore[i][j] >= maxScore) {
+							maxScore = myScore[i][j]
+							u = i
+							v = j
+						}
+
+						if (computerScore[i][j] >= maxScore) {
+							maxScore = computerScore[i][j]
+							u = i
+							v = j
+						}							
+					}
+				}
+			}
+			oneStep(u, v, white)
+			chessBoard[u][v] = white
+
+			//判断胜负
+			for (let k = 0; k < count; k++) {
+				if (wins[u][v][k]) {
+					//假如落子点处于某种赢法的落子范围，此赢法权值加1  权值为5是代表胜利
+					computerWin[k]++
+					//玩家此赢法无希望
+					//例如  下在第一列第一行 则计算机有三种赢法无希望（横 竖 正斜线）
+					myWin[k] = -1
+					if (computerWin[k] === 5) {
+						document.getElementById('message').innerHTML = 'computer win'
+						return
+					}
+				}
+			}						
+		}
+
+		function initChessBoard() {
+			//初始化棋盘
+			for(let i=0; i<15; i++) {
+				chessBoard[i] = []
+				for(let j=0; j<15; j++) {
+					chessBoard[i][j] = empty
+				}
+			}			
+		}
+
+
+		function initWins() {
+			//初始化赢法数组
+			for (let i = 0; i < 15; i++) {
+				wins[i] = []
+				for (let j = 0; j < 15; j++) {
+					wins[i][j] = []
+				}				
+			}
+			// 横向五子赢
+			for (let i=0; i<15; i++) {
+				for (let j=0; j<11; j++) {
+					//备注：  第一种赢法
+					//wins[0][0][0] = true
+					//wins[0][1][0] = true
+					//wins[0][2][0] = true
+					//wins[0][3][0] = true
+					//wins[0][4][0] = true
+
+					//备注：   第二种赢法
+					//wins[0][1][1] = true
+					//wins[0][2][1] = true
+					//wins[0][3][1] = true
+					//wins[0][4][1] = true
+					//wins[0][5][1] = true
+
+					for (let k=0; k<5; k++) {
+						wins[i][j+k][count] = true
+					}
+					count++
+				}
+			}
+			//纵向五子赢
+			for (let i=0; i<11; i++) {
+				for (let j=0; j<15; j++) {
+					for (let k=0; k<5; k++) {
+						wins[i+k][j][count] = true
+					}
+					count++
+				}
+			}
+			//正斜线五子赢
+			for (let i=0; i<11; i++) {
+				for (let j=0; j<11; j++) {
+					for (let k=0; k<5; k++) {
+						wins[i+k][j+k][count] = true
+					}
+					count++
+				}
+			}
+			//反斜线五子赢
+			for (let i=0; i<11; i++) {
+				for (let j=4; j<15; j++) {
+					for (let k=0; k<5; k++) {
+						wins[i+k][j-k][count] = true
+					}
+					count++
+				}
+			}
+
+			//权值初始化为0
+			for (var i = 0; i < count; i++) {
+				myWin[i] = 0
+				computerWin[i] = 0
+			}
+		}
+		
+	</script>
+</body>
+</html>
